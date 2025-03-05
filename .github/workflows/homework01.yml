@@ -17,4 +17,5 @@ jobs:
         pip install black==24.8.0 pytest==8.3.3 pandas==2.2.2
     - name: Run unittests
       run: |
+        cd homework01
         python -m unittest discover ${{ github.head_ref }}
