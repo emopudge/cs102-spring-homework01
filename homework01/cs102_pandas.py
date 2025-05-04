@@ -9,11 +9,16 @@ def filter_fsuir_students(data: pd.DataFrame) -> Tuple[int, int, pd.DataFrame]:
     Создает подвыборку студентов факультета систем управления и робототехники (ФСУиР).
     Возвращает количество таких студентов, количество уникальных групп и отфильтрованный датасет.
     """
-    pass
+    data_fsuir = data[
+        data["факультет"] == "факультет систем управления и робототехники"
+        ].copy()
+    fsuir_students_len = data_fsuir.shape[0]
+    fsuir_groups_len = len(set(data_fsuir["группа"]))
+    return (fsuir_students_len, fsuir_groups_len, data_fsuir)
 
 
 # Задача 2
-def find_homonymous_students(df: pd.DataFrame) -> Tuple[bool, int, pd.Series, str]:
+def find_homonymous_students(data_fsuir: pd.DataFrame) -> Tuple[bool, int, pd.Series, str]:
     """
     Проверяет наличие однофамильцев на ФСУиР, их количество, распределение по курсам
     и определяет группу с наибольшим числом однофамильцев.
@@ -23,8 +28,48 @@ def find_homonymous_students(df: pd.DataFrame) -> Tuple[bool, int, pd.Series, st
      - серию с числом однофамильцев по курсам
      - группу с максимальным числом однофамильцев
     """
-    pass
-    
+    data_fsuir["фамилия"] = data_fsuir["фио"].str.split().str[0]
+    surname_counts_total = data_fsuir.groupby("фамилия").size()
+    namesakes_total = surname_counts_total[surname_counts_total > 1].index
+    data_namesakes_total = data_fsuir[data_fsuir["фамилия"].isin(namesakes_total)]
+    num_namesakes_total = data_namesakes_total.shape[0]
+
+    course_surname_counts = []
+    for course in data_fsuir["курс"].unique():
+        data_course = data_fsuir[data_fsuir["курс"] == course]
+        surname_counts_course = data_course.groupby("фамилия").size()
+        namesakes_course = surname_counts_course[surname_counts_course > 1].index
+        data_namesakes_course = data_course[data_course["фамилия"].isin(namesakes_course)]
+        course_surname_counts.append(
+            {"курс": course, "количество_на_курсе": data_namesakes_course.shape[0]}
+        )
+
+    course_surname_counts_data = pd.DataFrame(course_surname_counts)
+    course_surname_counts_data = course_surname_counts_data.sort_values(
+        by="курс", key=lambda x: x.str.extract(r"(\d+)", expand=False).astype(int)
+    )
+
+    group_surname_counts = (
+        data_namesakes_total.groupby("группа")
+        .size()
+        .reset_index(name="количество_в_группе")
+    )
+    max_group = group_surname_counts.loc[
+        group_surname_counts["количество_в_группе"].idxmax()
+    ]
+
+    homonyms_per_course = {}
+
+    for _, row in course_surname_counts_data.iterrows():
+        homonyms_per_course[row["курс"][0]] = row["количество_на_курсе"]
+
+    return (
+        True,
+        num_namesakes_total,
+        pd.Series(homonyms_per_course),
+        max_group["группа"],
+    )
+
 
 # Задача 3
 def gender_identification(patronym: str) -> str:
@@ -34,14 +79,34 @@ def gender_identification(patronym: str) -> str:
     pass
 
 
-def analyze_patronyms(df: pd.DataFrame) -> Tuple[int, pd.Series]:
+def analyze_patronyms(data_fsuir: pd.DataFrame) -> Tuple[int, pd.Series]:
     """
     Определяет количество студентов без отчества и распределение студентов по полу на основе отчества.
     Возвращает:
      - количество студентов без отчества
      - серию с распределением студентов по полу 
     """
-    pass
+    data_fsuir["отчество"] = data_fsuir["фио"].str.split().str[2]
+    data_fsuir["есть_отчество"] = data_fsuir["отчество"].notna()
+    students_no_dad = data_fsuir[~data_fsuir["есть_отчество"]]
+    num_students_no_dad = students_no_dad.shape[0]
+
+    male_patronymic_pattern = r".*(?:ович|евич|ич)$"
+    female_patronymic_pattern = r".*(?:овна|евна|ична|инична)$"
+
+    data_fsuir["пол_по_отчеству"] = None
+    data_fsuir.loc[
+        data_fsuir["отчество"].str.contains(male_patronymic_pattern, na=False),
+        "пол_по_отчеству",
+    ] = "male"
+    data_fsuir.loc[
+        data_fsuir["отчество"].str.contains(female_patronymic_pattern, na=False),
+        "пол_по_отчеству",
+    ] = "female"
+    num_male = data_fsuir[data_fsuir["пол_по_отчеству"] == "male"].shape[0]
+    num_female = data_fsuir[data_fsuir["пол_по_отчеству"] == "female"].shape[0]
+    gender_counts = {"male": num_male, "female": num_female}
+    return (num_students_no_dad, pd.Series(gender_counts))
 
 
 # Задача 4
@@ -50,7 +115,23 @@ def faculty_statistics(data: pd.DataFrame) -> Tuple[pd.DataFrame, Tuple[str, int
     Подсчитывает количество студентов на каждом факультете,
     а также определяет факультеты с максимальным и минимальным числом студентов.
     """
-    pass
+    faculty_students_counts = []
+    for faculty in data["факультет"].unique():
+        data_faculty = data[data["факультет"] == faculty]
+        data_students_faculty = data_faculty.groupby("факультет").size()
+        faculty_students_counts.append(
+            {"факультет": faculty, "количество": data_students_faculty.values[0]}
+        )
+
+    faculty_students_counts_data = pd.DataFrame(faculty_students_counts)
+
+    max_faculty = faculty_students_counts_data.loc[
+        faculty_students_counts_data["количество"].idxmax()
+    ]
+    min_faculty = faculty_students_counts_data.loc[
+        faculty_students_counts_data["количество"].idxmin()
+    ]
+    return (faculty_students_counts_data, max_faculty.iloc[0], min_faculty.iloc[0])
 
 
 # Задача 5
@@ -59,7 +140,9 @@ def course_statistics(data: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
     Вычисляет среднее и медианное число студентов на каждом курсе.
     Возвращает две серии с результатами: сначала средние, потом медиана.
     """
-    pass
+    sorted = data.groupby("курс")["факультет"].value_counts()
+    stats = sorted.groupby("курс").agg(["mean", "median"])
+    return stats["mean"], stats["median"]
 
 
 # Задача 6
@@ -73,7 +156,18 @@ def most_popular_name(data: pd.DataFrame) -> Tuple[str, str, str, int, float]:
      3. факультет
      4. доля
     """
-    pass
+    data["имя"] = data["фио"].str.split(" ").str[1]
+    popular_name = data["имя"].value_counts().idxmax()
+
+    name_group = data[data["имя"] == popular_name]["группа"].value_counts().idxmax()
+
+    faculty = data[data["группа"] == name_group]["факультет"].iloc[0]
+
+    course = data[data["группа"] == name_group]["курс"].iloc[0]
+
+    num_copies_popular_name = data["имя"].value_counts().max()
+    name_ratio = round(num_copies_popular_name / len(data), 2)
+    return (popular_name, name_group, faculty, course, name_ratio)
 
 
 # Задача 7
@@ -81,7 +175,13 @@ def find_students_with_name_starting_P(data: pd.DataFrame) -> pd.DataFrame:
     """
     Находит студентов, чье имя встречается ровно один раз и начинается на "П". Выводит их ФИО, факультет и курс.
     """
-    pass
+    data["имя"] = data["фио"].str.split(" ").str[1]
+    starts_with_p = data[data["имя"].str.startswith("П")]
+    name_counts = starts_with_p["имя"].value_counts()
+    unique_names = name_counts[name_counts == 1].index
+    result = starts_with_p[starts_with_p["имя"].isin(unique_names)]
+    result = result[["фио", "факультет", "курс"]]
+    return result
 
 
 # Задача 8
@@ -91,7 +191,42 @@ def highest_avg_grade_faculty(data: pd.DataFrame) -> Tuple[str, str, int]:
     Определяет пол, средний балл котого выше.
     Сначала возвращает факультет, затем пол, затем балл.
     """
-    pass
+    grade3 = data[data["курс"] == "3-й"].copy()
+    avg_facs = []
+    for faculty in grade3["факультет"].unique():
+        data_fac = grade3[grade3["факультет"] == faculty]
+        avg = data_fac["средний_балл"].mean()
+        avg_facs.append({"факультет": faculty, "средний_балл": avg})
+
+    avg_facs = pd.DataFrame(avg_facs).sort_values(by="средний_балл", ascending=False)
+    fac = avg_facs.iloc[0]["факультет"]
+
+    data_fac = grade3[grade3["факультет"] == fac].copy()
+    data_fac["отчество"] = data_fac["фио"].str.split().str[2]
+    male_patronymic_pattern = r".*(?:ович|евич|ич)$"
+    female_patronymic_pattern = r".*(?:овна|евна|ична|инична)$"
+    data_fac["пол_по_отчеству"] = None
+    data_fac.loc[
+        data_fac["отчество"].str.contains(male_patronymic_pattern, na=False),
+        "пол_по_отчеству",
+    ] = "male"
+    data_fac.loc[
+        data_fac["отчество"].str.contains(female_patronymic_pattern, na=False),
+        "пол_по_отчеству",
+    ] = "female"
+
+    avg_gender = []
+    for gender in data_fac["пол_по_отчеству"].unique():
+        data_fac_gender = data_fac[data_fac["пол_по_отчеству"] == gender]
+        avg = data_fac_gender["средний_балл"].mean()
+        avg_gender.append({"пол": gender, "средний_балл": avg})
+    avg_gender = pd.DataFrame(avg_gender).sort_values(
+        by="средний_балл", ascending=False
+    )
+    best_gender = avg_gender.iloc[0]["пол"]
+    best_grade = round(avg_gender.iloc[0]["средний_балл"])
+
+    return (fac, best_gender, best_grade)
 
 
 # Задача 9
@@ -100,7 +235,27 @@ def find_consecutive_students(data: pd.DataFrame) -> pd.DataFrame:
     Находит первых 5 студентов, которым номера были присвоены подряд.
     Выводит их ФИО, факультет, курс и номер группы.
     """
-    pass
+
+    def find_consecutive_students(data):
+        data = data.sort_values(by="ису", ascending=True)
+
+        def find_sequence(start_isu, depth):
+            if depth == 0:
+                return []
+            if (data["ису"] == start_isu).any():
+                sequence = find_sequence(start_isu + 1, depth - 1)
+                if sequence is not None:
+                    return [int(start_isu)] + sequence
+            return None
+
+        for i in range(len(data)):
+            current_isu = data["ису"].iloc[i]
+            sequence = find_sequence(current_isu, 5)
+            if sequence:
+                consecutive_students = data[data["ису"].isin(sequence)]
+                return consecutive_students[
+                    ["фио", "ису", "факультет", "курс", "группа"]
+                ].sort_values(by="ису")
 
 
 if __name__ == "__main__":
